@@ -1,0 +1,106 @@
+name: Deploy Cloud Run - api
+run-name: >-
+  Deploy to ${{
+    github.event.pull_request.base.ref == 'tai-pr-tst' && 'tai-pr-tst' || 
+    github.event.pull_request.base.ref == 'tai-pr-prd' && 'tai-pr-prd' || 
+    github.ref_name == 'tai-pr-tst' && 'tai-pr-tst' || 
+    github.ref_name == 'tai-pr-prd' && 'tai-pr-prd' || 
+    'tai-pr-dev' 
+  }}
+
+on:
+  workflow_dispatch:
+  # manually trigger
+  pull_request:
+    branches:
+      - tai-pr-tst
+      - tai-pr-prd
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  GCP_SERVICE_ACCOUNT_DEV: ${{ secrets.GCP_SERVICE_ACCOUNT_DEV }}
+  GCP_SERVICE_ACCOUNT_TST: ${{ secrets.GCP_SERVICE_ACCOUNT_TST }}
+  GCP_SERVICE_ACCOUNT_PRD: ${{ secrets.GCP_SERVICE_ACCOUNT_PRD }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Get project id
+        id: get-project-id
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BRANCH="${{ github.base_ref }}"
+          else
+            BRANCH="${{ github.ref_name }}"
+          fi
+
+          if [[ "$BRANCH" == "tai-pr-dev" || "$BRANCH" == "tai-pr-tst" || "$BRANCH" == "tai-pr-prd" ]]; then
+            PROJECT_ID="$BRANCH"
+          else
+            PROJECT_ID="tai-pr-dev"
+          fi
+
+          echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
+
+      - name: Set gcp sa
+        id: set-sa
+        run: |
+          PROJECT_ENV=${PROJECT_ID: -3}
+          echo "project env: $PROJECT_ENV"
+          case $PROJECT_ENV in
+            dev) echo "GCP_SERVICE_ACCOUNT=$GCP_SERVICE_ACCOUNT_DEV" >> $GITHUB_ENV ;;
+            tst) echo "GCP_SERVICE_ACCOUNT=$GCP_SERVICE_ACCOUNT_TST" >> $GITHUB_ENV ;;
+            prd) echo "GCP_SERVICE_ACCOUNT=$GCP_SERVICE_ACCOUNT_PRD" >> $GITHUB_ENV ;;
+            *) echo "Invalid" ; exit 1 ;;
+          esac
+      
+      - name: GCP WIF
+        uses: 'google-github-actions/auth@v3'
+        with:
+            workload_identity_provider: ${{ secrets.GCP_WIF }}
+            service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          version: 'latest'
+
+      - name: Configure Docker
+        run: |
+          gcloud auth configure-docker ${{ vars.REGION }}-docker.pkg.dev
+
+      - name: Build and Push Image
+        run: |
+          IMAGE_TAG="${{ vars.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/tai-pr-docker/api:latest"
+          docker build . --platform linux/amd64 -t $IMAGE_TAG
+          docker push $IMAGE_TAG
+          
+          echo "FULL_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Deploy API to Cloud Run
+        run: |
+          gcloud run deploy api \
+            --image=${{ env.FULL_IMAGE_TAG }} \
+            --set-env-vars GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }} \
+            --set-env-vars THREADS=${{ vars.THREADS }} \
+            --concurrency=${{ vars.THREADS }} \
+            --ingress=internal \
+            --no-allow-unauthenticated \
+            --max-instances=1 \
+            --min-instances=1 \
+            --region=${{ vars.REGION }} \
+            --service-account=${{ env.PROJECT_ID }}-sa-cloud-run@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --timeout=60 \
+            --cpu=1 \
+            --memory=512Mi \
+            --startup-probe httpGet.path=/health,initialDelaySeconds=30 \
+            --liveness-probe httpGet.path=/health,periodSeconds=30
