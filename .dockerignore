@@ -1,0 +1,13 @@
+**/*.pyc
+**/*.pyo
+**/__pycache__/
+**/.DS_Store
+.venv/
+.env*
+env_*.yaml
+.git
+.gitignore
+.gcloudignore
+debug/
+gcp_workflow/
+.vscode
