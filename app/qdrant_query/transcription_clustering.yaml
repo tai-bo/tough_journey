@@ -1,0 +1,14 @@
+date_field: record_start
+page_size: 100
+
+with_payload:
+  - record_start
+  - transcription
+
+with_vectors:
+  - clustering
+
+nearest_point:
+  using: clustering
+  score_threshold: 0.833947
+  limit: 10

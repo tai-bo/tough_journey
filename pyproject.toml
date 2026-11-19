@@ -1,0 +1,26 @@
+[project]
+name = "tai_pr_api"
+version = "0.1.0"
+description = "API endpoints serving TAI Performance Review app."
+requires-python = "==3.13.*"
+dependencies = [
+    "firebase-admin>=7.1.0",
+    "pydantic>=2.12.5",
+    "pydantic-settings[gcp-secret-manager]",
+    "pydantic-ai>=1.39.0",
+    "google-genai[aiohttp]>=1.56.0",
+    "qdrant-client>=1.17.0",
+    "fastapi[standard]>=0.125.0",
+    "logfire[fastapi]",
+    "logfire[redis]",
+    "logfire[aiohttp-client]",
+    "aiohttp[speedups]>=3.13.2",
+    "networkx>=3.6.1",
+    "redis>=7.4.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=9.0.2","pytest-cov>=7.0.0","pytest-asyncio","asgi-lifespan"]
+
+[tool.pytest.ini_options]
+addopts = "--tb=no"

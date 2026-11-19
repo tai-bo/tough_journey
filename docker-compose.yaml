@@ -1,0 +1,28 @@
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --workers 1
+    ports:
+      - "8080:8080"
+    volumes:
+      - ${VOL}:/home/tai_runner/.config/gcloud/gcp_creds.json:ro
+    environment:
+      - GOOGLE_CLOUD_PROJECT=${PROJECT_ID}
+      - GOOGLE_APPLICATION_CREDENTIALS=/home/tai_runner/.config/gcloud/gcp_creds.json
+
+  tests:
+    build:
+      context: .
+      target: test
+    command: ["uv", "run", "pytest", "-v"]
+    depends_on:
+      api:
+        condition: service_started
+    volumes:
+      - ${VOL}:/home/tai_runner/.config/gcloud/gcp_creds.json:ro
+    environment:
+      - API_URL=http://api:8080
+      - GOOGLE_CLOUD_PROJECT=${PROJECT_ID}
+      - GOOGLE_APPLICATION_CREDENTIALS=/home/tai_runner/.config/gcloud/gcp_creds.json

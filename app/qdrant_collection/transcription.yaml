@@ -1,0 +1,16 @@
+index_auth_uid: true
+max_input_tokens: 2048
+
+vector_configs:
+  - name: document
+    size: 768
+  
+  - name: classification
+    size: 768
+  
+  - name: clustering
+    size: 768
+
+payload_index_schemas:
+  - field_name: record_start
+    field_schema: datetime
